@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ruleta de Grupos</title>
+<link rel="icon" type="image/png" href="motor.png">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0e12; --surface: #16161d; --surface2: #1e1e28;
+    --gold: #f0c040; --gold2: #e8a820; --text: #f0ede8; --muted: #6b6880;
+    --g1: #7b6ef6; --g2: #4ecb8f; --g3: #f06a50;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text);
+    min-height: 100vh; overflow-x: hidden; display: flex; flex-direction: column; align-items: center;
+  }
+  body::before {
+    content: ''; position: fixed; inset: 0;
+    background: radial-gradient(ellipse 600px 400px at 20% 10%, rgba(123,110,246,0.07) 0%, transparent 70%),
+                radial-gradient(ellipse 500px 300px at 80% 80%, rgba(240,106,80,0.06) 0%, transparent 70%);
+    pointer-events: none; z-index: 0;
+  }
+  header { text-align: center; padding: 2.5rem 1rem 1rem; position: relative; z-index: 1; }
+  header h1 {
+    font-family: 'Bebas Neue', sans-serif; font-size: clamp(2.8rem, 8vw, 5rem);
+    letter-spacing: 0.08em; color: var(--gold); line-height: 1; text-shadow: 0 0 60px rgba(240,192,64,0.3);
+  }
+  header p { font-size: 0.85rem; color: var(--muted); margin-top: 6px; letter-spacing: 0.05em; }
+  .main-layout {
+    display: flex; flex-direction: column; align-items: center; gap: 2rem;
+    width: 100%; max-width: 960px; padding: 1rem 1.5rem 3rem; position: relative; z-index: 1;
+  }
+  .wheel-section { display: flex; flex-direction: column; align-items: center; gap: 1.2rem; }
+  .wheel-container {
+    position: relative;
+    width: clamp(280px, 60vw, 380px); height: clamp(280px, 60vw, 380px);
+  }
+  .wheel-container::before {
+    content: ''; position: absolute; inset: -8px; border-radius: 50%;
+    background: conic-gradient(from 0deg, var(--gold), var(--g1), var(--g2), var(--g3), var(--gold));
+    opacity: 0.25; animation: rotateSlow 8s linear infinite; z-index: 0;
+  }
+  @keyframes rotateSlow { to { transform: rotate(360deg); } }
+  canvas#wheel {
+    position: relative; z-index: 1; border-radius: 50%; display: block; width: 100%; height: 100%;
+    filter: drop-shadow(0 0 24px rgba(240,192,64,0.2));
+  }
+  .pointer {
+    position: absolute; top: -18px; left: 50%; transform: translateX(-50%); z-index: 10;
+    width: 0; height: 0; border-left: 12px solid transparent; border-right: 12px solid transparent;
+    border-top: 32px solid var(--gold); filter: drop-shadow(0 2px 8px rgba(240,192,64,0.6));
+  }
+  .pointer::after {
+    content: ''; position: absolute; top: -36px; left: -6px;
+    width: 12px; height: 12px; background: var(--gold); border-radius: 50%;
+  }
+  .spin-btn {
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; letter-spacing: 0.1em;
+    color: var(--bg); background: var(--gold); border: none; border-radius: 60px;
+    padding: 14px 48px; cursor: pointer; transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+    box-shadow: 0 4px 24px rgba(240,192,64,0.35); position: relative; overflow: hidden;
+  }
+  .spin-btn::after { content: ''; position: absolute; inset: 0; background: rgba(255,255,255,0.15); opacity: 0; transition: opacity 0.2s; }
+  .spin-btn:hover:not(:disabled)::after { opacity: 1; }
+  .spin-btn:active:not(:disabled) { transform: scale(0.97); }
+  .spin-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  .result-badge {
+    height: 42px; display: flex; align-items: center; justify-content: center; gap: 10px;
+    font-size: 1.4rem; font-weight: 600; color: var(--gold); min-width: 160px; transition: all 0.3s;
+  }
+  .result-badge .check {
+    width: 26px; height: 26px; background: var(--g2); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-size: 14px; color: #fff;
+    opacity: 0; transform: scale(0); transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1);
+  }
+  .result-badge.show .check { opacity: 1; transform: scale(1); }
+  .progress-track { width: clamp(280px, 60vw, 380px); height: 4px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--gold2), var(--gold)); border-radius: 4px; transition: width 0.4s ease; width: 0%; }
+  .group-pills { display: flex; gap: 8px; }
+  .pill {
+    padding: 4px 14px; border-radius: 20px; font-size: 12px; font-weight: 500; letter-spacing: 0.04em;
+    border: 1px solid rgba(255,255,255,0.08); color: var(--muted); background: var(--surface); transition: all 0.3s;
+  }
+  .pill.active { border-color: var(--gold); color: var(--gold); background: rgba(240,192,64,0.08); }
+  .pill.done { border-color: var(--g2); color: var(--g2); background: rgba(78,203,143,0.08); }
+  .groups-section {
+    width: 100%; max-width: 600px; opacity: 0; transform: translateY(20px);
+    transition: opacity 0.5s ease, transform 0.5s ease; pointer-events: none;
+  }
+  .groups-section.visible { opacity: 1; transform: translateY(0); pointer-events: all; }
+  .groups-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .group-card {
+    background: var(--surface); border: 1px solid rgba(255,255,255,0.06); border-radius: 16px;
+    padding: 1.2rem 1rem; text-align: center; opacity: 0; transform: translateY(16px) scale(0.97);
+  }
+  .group-card.appear { animation: cardIn 0.5s cubic-bezier(0.34,1.3,0.64,1) forwards; }
+  @keyframes cardIn { to { opacity: 1; transform: translateY(0) scale(1); } }
+  .group-card:nth-child(1) { border-top: 3px solid var(--g1); }
+  .group-card:nth-child(2) { border-top: 3px solid var(--g2); }
+  .group-card:nth-child(3) { border-top: 3px solid var(--g3); }
+  .group-num { font-family: 'Bebas Neue', sans-serif; font-size: 1rem; letter-spacing: 0.12em; margin-bottom: 12px; }
+  .group-card:nth-child(1) .group-num { color: var(--g1); }
+  .group-card:nth-child(2) .group-num { color: var(--g2); }
+  .group-card:nth-child(3) .group-num { color: var(--g3); }
+  .member-list { display: flex; flex-direction: column; gap: 6px; }
+  .member-item { background: var(--surface2); border-radius: 8px; padding: 6px 10px; font-size: 0.85rem; font-weight: 500; color: var(--text); }
+  .member-item.empty { color: var(--muted); font-weight: 400; opacity: 0.5; }
+  .reset-btn {
+    display: block; margin: 1.2rem auto 0; background: none; border: 1px solid rgba(255,255,255,0.1);
+    color: var(--muted); font-family: 'DM Sans', sans-serif; font-size: 0.8rem; padding: 8px 20px;
+    border-radius: 20px; cursor: pointer; transition: all 0.2s; letter-spacing: 0.03em;
+  }
+  .reset-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.25); }
+  .confetti-canvas { position: fixed; inset: 0; pointer-events: none; z-index: 100; }
+  @media (max-width: 520px) { .groups-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<canvas class="confetti-canvas" id="confettiCanvas"></canvas>
+<header>
+  <h1>Ruleta de Grupos</h1>
+  <p>Gira 9 veces · 3 grupos de 3 personas</p>
+</header>
+<div class="main-layout">
+  <div class="wheel-section">
+    <div class="group-pills" id="groupPills">
+      <span class="pill active" id="pill0">Grupo 1</span>
+      <span class="pill" id="pill1">Grupo 2</span>
+      <span class="pill" id="pill2">Grupo 3</span>
+    </div>
+    <div class="wheel-container">
+      <div class="pointer"></div>
+      <canvas id="wheel"></canvas>
+    </div>
+    <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="result-badge" id="resultBadge">
+      <span id="resultText">–</span>
+      <span class="check">✓</span>
+    </div>
+    <button class="spin-btn" id="spinBtn" onclick="spinWheel()">GIRAR</button>
+  </div>
+  <div class="groups-section" id="groupsSection">
+    <div class="groups-grid" id="groupsGrid"></div>
+    <button class="reset-btn" onclick="resetAll()">↺ Nueva ronda</button>
+  </div>
+</div>
+
+<script>
+// ── DATA ──────────────────────────────────────────────────────────
+const ALL_NAMES = ["Nico","Gabi","Dani","Sindy","Juanito","Nickson","Andres","Angie"];
+const SLICE_COLORS = ["#7b6ef6","#4ecb8f","#f06a50","#f0c040","#60b4f0","#e870b0","#a8d060","#f0904a","#90a0c8"];
+
+// ── GRUPOS POR DEFECTO (configuración fija) ──────────────────────
+const DEFAULT_GROUPS = [
+  ["Angie", "Dani", "Nickson"],  // Grupo 1
+  ["Juanito", "Andres", "Nico"],   // Grupo 2
+  ["Gabi", "Sindy"]      // Grupo 3
+];
+
+// ── Función para generar la asignación basada en los grupos por defecto ──
+function generateDefaultAssignment() {
+  // Creamos una copia profunda de los grupos por defecto
+  return DEFAULT_GROUPS.map(group => [...group]);
+}
+
+// ── STATE ─────────────────────────────────────────────────────────
+let assignment = [];   // assignment[i] = grupo destino de la persona i en spinOrder
+let spinOrder  = [];   // orden en que se revelarán los nombres
+let spinStep   = 0;
+let available  = [...ALL_NAMES];
+let groups     = [[],[],[]];
+let isSpinning = false;
+let angle      = 0;
+
+function buildRound() {
+  // Usamos los grupos por defecto en lugar de generación aleatoria
+  const asgn = generateDefaultAssignment(); // [[g0 members],[g1],[g2]]
+  
+  // Construir spinOrder: intercalar un miembro de cada grupo por turno
+  // para que los grupos se vayan llenando de forma pareja y natural
+  spinOrder = [];
+  for (let slot = 0; slot < 3; slot++) {
+    // Mezclamos el orden de los grupos para cada slot para dar variedad visual
+    const groupOrder = [0,1,2].sort(() => Math.random()-0.5);
+    for (const g of groupOrder) {
+      spinOrder.push({ name: asgn[g][slot], destGroup: g });
+    }
+  }
+  spinStep  = 0;
+  available = [...ALL_NAMES];
+  groups    = [[],[],[]];
+}
+
+// ── CANVAS ────────────────────────────────────────────────────────
+const canvas = document.getElementById("wheel");
+const ctx    = canvas.getContext("2d");
+
+function sizeCanvas() {
+  const size = canvas.parentElement.offsetWidth;
+  canvas.width = canvas.height = size;
+  drawWheel();
+}
+window.addEventListener('resize', sizeCanvas);
+setTimeout(sizeCanvas, 100);
+
+function drawWheel() {
+  const W = canvas.width, cx = W/2, R = W/2 - 2;
+  const n = available.length;
+  ctx.clearRect(0,0,W,W);
+  if (!n) return;
+  const slice = (2*Math.PI)/n;
+
+  for (let i = 0; i < n; i++) {
+    const s = angle + i*slice, e = s + slice;
+    const ci = ALL_NAMES.indexOf(available[i]);
+    ctx.beginPath(); ctx.moveTo(cx,cx); ctx.arc(cx,cx,R,s,e); ctx.closePath();
+    ctx.fillStyle = SLICE_COLORS[ci % SLICE_COLORS.length]; ctx.fill();
+    ctx.strokeStyle = 'rgba(14,14,18,0.6)'; ctx.lineWidth = 2; ctx.stroke();
+
+    ctx.save();
+    ctx.translate(cx,cx); ctx.rotate(s + slice/2);
+    ctx.translate(R*0.68, 0);
+    ctx.shadowColor='rgba(0,0,0,0.5)'; ctx.shadowBlur=4;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.font = `600 ${Math.max(11,Math.min(15,W/(n*1.4)))}px 'DM Sans',sans-serif`;
+    ctx.fillStyle='#fff'; ctx.fillText(available[i],0,0);
+    ctx.restore();
+  }
+  // Centro
+  ctx.beginPath(); ctx.arc(cx,cx,R*0.12,0,2*Math.PI);
+  ctx.fillStyle='#0e0e12'; ctx.fill();
+  ctx.strokeStyle='rgba(240,192,64,0.6)'; ctx.lineWidth=2; ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx,cx,R*0.04,0,2*Math.PI);
+  ctx.fillStyle='#f0c040'; ctx.fill();
+}
+
+// ── SPIN ──────────────────────────────────────────────────────────
+function spinWheel() {
+  if (isSpinning || spinStep >= spinOrder.length) return;
+  isSpinning = true;
+  document.getElementById("spinBtn").disabled = true;
+
+  const { name: winner } = spinOrder[spinStep];
+
+  // La ruleta muestra TODOS los disponibles y cae exactamente en el ganador
+  const n = available.length;
+  const slice = (2*Math.PI)/n;
+  const winIdx = available.indexOf(winner);
+  
+  // La aguja está arriba (posición 12 en punto, que corresponde a -π/2 en radianes)
+  // Necesitamos que el centro del slice del ganador esté exactamente en -π/2 (arriba)
+  // El slice i va desde angle + i*slice hasta angle + (i+1)*slice
+  // El centro del slice i está en angle + i*slice + slice/2
+  // Queremos que ese centro esté en -π/2 (o su equivalente módulo 2π)
+  
+  // Calculamos el ángulo base que pondría el slice winIdx exactamente arriba
+  const targetSliceCenter = -Math.PI/2; // posición de la aguja (arriba)
+  const currentSliceCenter = (angle + winIdx * slice + slice/2) % (2*Math.PI);
+  
+  // Calculamos cuánto necesitamos rotar para que el slice del ganador quede arriba
+  let rotationNeeded = targetSliceCenter - currentSliceCenter;
+  // Normalizamos a [0, 2π)
+  rotationNeeded = ((rotationNeeded % (2*Math.PI)) + 2*Math.PI) % (2*Math.PI);
+  
+  // Añadimos varias vueltas completas para el efecto dramático
+  const extraSpins = (5 + Math.floor(Math.random() * 3)) * 2 * Math.PI;
+  const targetAngle = angle + extraSpins + rotationNeeded;
+
+  const startAngle = angle, delta = targetAngle - startAngle;
+  const duration = 3000 + Math.random()*800;
+  const startTime = performance.now();
+
+  const badge = document.getElementById('resultBadge');
+  badge.classList.remove('show');
+  document.getElementById('resultText').textContent = '…';
+
+  function easeOut(t) { return 1 - Math.pow(1-t, 4); }
+
+  (function frame(now) {
+    const t = Math.min((now - startTime)/duration, 1);
+    angle = startAngle + delta * easeOut(t);
+    drawWheel();
+    if (t < 1) requestAnimationFrame(frame);
+    else { isSpinning = false; onPick(); }
+  })(performance.now());
+}
+
+function onPick() {
+  const { name, destGroup } = spinOrder[spinStep];
+  spinStep++;
+
+  groups[destGroup].push(name);
+  available = available.filter(n => n !== name);
+
+  // Badge
+  document.getElementById('resultText').textContent = name;
+  document.getElementById('resultBadge').classList.add('show');
+
+  // Progreso
+  document.getElementById('progressFill').style.width = ((9-available.length)/9*100)+'%';
+
+  // Pills
+  for (let g=0;g<3;g++) {
+    const p = document.getElementById(`pill${g}`);
+    if (groups[g].length===3) p.className='pill done';
+    else if (groups[g].length>0) p.className='pill active';
+    else p.className='pill';
+  }
+
+  renderGroupCards();
+
+  if (available.length === 0) {
+    setTimeout(()=>{ document.getElementById('groupsSection').classList.add('visible'); launchConfetti(); }, 400);
+    return;
+  }
+
+  drawWheel();
+  document.getElementById("spinBtn").disabled = false;
+}
+
+// ── RENDER CARDS ──────────────────────────────────────────────────
+function renderGroupCards() {
+  const grid = document.getElementById('groupsGrid');
+  grid.innerHTML = '';
+  ['GRUPO 1','GRUPO 2','GRUPO 3'].forEach((label,g) => {
+    const card = document.createElement('div');
+    card.className = 'group-card';
+    card.innerHTML = `<div class="group-num">${label}</div><div class="member-list">`
+      + [0,1,2].map(s => groups[g][s]
+          ? `<div class="member-item">${groups[g][s]}</div>`
+          : `<div class="member-item empty">—</div>`).join('')
+      + `</div>`;
+    grid.appendChild(card);
+    setTimeout(()=>card.classList.add('appear'), 10+g*80);
+  });
+  if (9-available.length >= 1) document.getElementById('groupsSection').classList.add('visible');
+}
+
+// ── CONFETTI ──────────────────────────────────────────────────────
+function launchConfetti() {
+  const cc = document.getElementById('confettiCanvas');
+  const cx = cc.getContext('2d');
+  cc.width = window.innerWidth; cc.height = window.innerHeight;
+  const colors = ['#f0c040','#7b6ef6','#4ecb8f','#f06a50','#60b4f0','#ffffff'];
+  const pts = Array.from({length:120},()=>({
+    x:Math.random()*cc.width, y:-20, vx:(Math.random()-.5)*6, vy:2+Math.random()*4,
+    rot:Math.random()*360, vrot:(Math.random()-.5)*8, size:5+Math.random()*8,
+    color:colors[Math.floor(Math.random()*colors.length)], shape:Math.random()>.5?'rect':'circle', alpha:1
+  }));
+  let f=0;
+  (function anim(){
+    cx.clearRect(0,0,cc.width,cc.height);
+    pts.forEach(p=>{
+      p.x+=p.vx; p.y+=p.vy; p.rot+=p.vrot; p.vy+=0.05;
+      if(f>80) p.alpha-=0.015; if(p.alpha<=0) return;
+      cx.save(); cx.globalAlpha=p.alpha; cx.translate(p.x,p.y); cx.rotate(p.rot*Math.PI/180);
+      cx.fillStyle=p.color;
+      if(p.shape==='rect') cx.fillRect(-p.size/2,-p.size/2,p.size,p.size*.5);
+      else { cx.beginPath(); cx.arc(0,0,p.size/2,0,2*Math.PI); cx.fill(); }
+      cx.restore();
+    });
+    f++; if(f<160) requestAnimationFrame(anim); else cx.clearRect(0,0,cc.width,cc.height);
+  })();
+}
+
+// ── RESET ─────────────────────────────────────────────────────────
+function resetAll() {
+  angle = 0;
+  buildRound();
+  document.getElementById('spinBtn').disabled = false;
+  document.getElementById('resultText').textContent = '–';
+  document.getElementById('resultBadge').classList.remove('show');
+  document.getElementById('progressFill').style.width = '0%';
+  document.getElementById('groupsSection').classList.remove('visible');
+  document.getElementById('groupsGrid').innerHTML = '';
+  for(let i=0;i<3;i++) document.getElementById(`pill${i}`).className = i===0?'pill active':'pill';
+  drawWheel();
+}
+
+// ── INIT ──────────────────────────────────────────────────────────
+buildRound();
+sizeCanvas();
+</script>
+</body>
+</html>
+
